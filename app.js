@@ -87,124 +87,173 @@ btnSwitch.addEventListener('click', () => {
   startCamera();
 });
 
-// ====== 定位（GPS优先，8秒超时IP兜底，可随时重试GPS） ======
+// ====== 定位（GPS + IP 并行竞速，离线缓存兜底） ======
 async function startGps() {
+  // 先从缓存恢复
+  const cached = loadCache();
+  if (cached) {
+    locAddress = cached.addr;
+    locLat = cached.lat;
+    locLng = cached.lng;
+    weatherDesc = cached.wx || '获取中';
+    weatherTemp = cached.tmp;
+    updatePreview();
+  }
+
   if (!navigator.geolocation) {
-    await fallbackIp();
+    setGpsState('waiting', 'IP定位中...');
+    raceIpOnly();
     return;
   }
 
-  // 直接弹出引导，不依赖 permissions API（部分手机不支持）
+  // 尝试静默 GPS（如果已有权限）
   setGpsState('waiting', '等待授权');
   gpsGuide.classList.remove('hidden');
+  trySilentGps(); // 后台跑，不阻塞
 
   gpsBtn.onclick = async () => {
     gpsGuide.classList.add('hidden');
     setGpsState('waiting', '获取位置中...');
-    const ok = await tryGpsFix();
-    if (!ok) {
-      await fallbackIp();
-    }
+    raceGpsAndIp();
   };
-
-  // 用户可能之前已授权，并行静默尝试 GPS（不阻塞 IP）
-  trySilentGps();
 }
 
-// 并行静默尝试：如果浏览器已有权限，直接出结果
+// GPS + IP 并行竞速
+async function raceGpsAndIp() {
+  gpsGuide.classList.add('hidden');
+
+  const gpsPromise = new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true, timeout: 8000, maximumAge: 60000
+    });
+  }).then(pos => ({ type: 'gps', lat: pos.coords.latitude, lng: pos.coords.longitude }))
+    .catch(() => ({ type: 'gps-fail' }));
+
+  const ipPromise = quickIp().then(data =>
+    data ? { type: 'ip', ...data } : { type: 'ip-fail' }
+  );
+
+  // 谁先到用谁
+  const first = await Promise.race([gpsPromise, ipPromise]);
+
+  if (first.type === 'gps') {
+    await applyGps(first.lat, first.lng);
+    // GPS 到了，IP 不用等了
+  } else if (first.type === 'ip') {
+    applyIp(first);
+    // GPS 可能还在跑，等等看
+    const second = await gpsPromise;
+    if (second.type === 'gps') {
+      await applyGps(second.lat, second.lng); // 升级为 GPS
+    }
+  } else {
+    // GPS 先失败，等 IP
+    const ip = await ipPromise;
+    if (ip.type === 'ip') applyIp(ip);
+    else setGpsState('err', '无网络·点此重试');
+  }
+
+  // 确保有重试入口
+  if (!gpsReady) {
+    gpsText.style.cursor = 'pointer';
+    gpsText.onclick = () => { setGpsState('waiting', '获取位置中...'); raceGpsAndIp(); };
+  }
+}
+
+// 仅 IP（无 GPS 设备）
+async function raceIpOnly() {
+  const data = await quickIp();
+  if (data) applyIp(data);
+  else setGpsState('err', '无网络');
+  gpsText.style.cursor = 'pointer';
+  gpsText.onclick = () => { setGpsState('waiting', '定位中...'); raceIpOnly(); };
+}
+
+// 静默尝试 GPS
 async function trySilentGps() {
   try {
     const pos = await new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false, // 低精度模式，更快
-        timeout: 5000,
-        maximumAge: 120000 // 允许用2分钟内的缓存
+        enableHighAccuracy: false, timeout: 4000, maximumAge: 120000
       });
     });
     gpsGuide.classList.add('hidden');
-    await onGpsSuccess(pos.coords.latitude, pos.coords.longitude);
-  } catch {
-    // 静默失败，等用户点按钮或 IP 兜底
-  }
+    await applyGps(pos.coords.latitude, pos.coords.longitude);
+  } catch {}
 }
 
-// 用户点击"启用位置权限"或点状态栏重试
-async function tryGpsFix() {
+// 快速 IP（并行请求多个，谁先到用谁）
+async function quickIp() {
+  const apis = [
+    async () => { const r=await fetch('https://ipapi.co/json/'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.region,c:d.city,la:d.latitude,ln:d.longitude}; },
+    async () => { const r=await fetch('https://ip-api.com/json/?lang=zh-CN'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.regionName,c:d.city,la:d.lat,ln:d.lon}; },
+  ];
+
+  // Promise.any: 最快的成功返回
   try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      });
-    });
-    gpsGuide.classList.add('hidden');
-    await onGpsSuccess(pos.coords.latitude, pos.coords.longitude);
-    return true;
-  } catch (e) {
-    console.warn('GPS失败:', e.message);
-    return false;
+    return await Promise.any(apis.map(fn => fn()));
+  } catch {
+    return null;
   }
 }
 
-async function onGpsSuccess(lat, lng) {
+async function applyGps(lat, lng) {
   locLat = lat;
   locLng = lng;
   gpsReady = true;
   setGpsState('ok', 'GPS已定位');
 
-  const addr = await reverseGeocode(lat, lng);
+  const addr = await reverseGeocodeOnline(lat, lng);
   locAddress = addr;
-  $('#wm-loc-preview').textContent = addr;
   fetchWeather(lat, lng);
+  saveCache(lat, lng, addr);
+  updatePreview();
   startWatchGps();
 }
 
-// IP 兜底
-async function fallbackIp() {
-  if (gpsReady) return; // GPS 已成功就不覆盖
-  setGpsState('waiting', 'IP定位中...');
+function applyIp(data) {
+  if (gpsReady) return;
+  const parts = [];
+  if (data.r) parts.push(data.r);
+  if (data.c && data.c !== data.r) parts.push(data.c);
+  const text = parts.length > 0 ? parts.join(' ') : '未知城市';
+  locAddress = text + ' (IP粗略)';
+  if (data.la) { locLat = data.la; locLng = data.ln; }
+  if (data.la) fetchWeather(data.la, data.ln);
+  setGpsState('err', 'IP粗略·点此重试GPS');
+  updatePreview();
+  if (data.la && data.ln) saveCache(data.la, data.ln, text);
+}
 
-  const apis = [
-    async () => { const r=await fetch('https://ipapi.co/json/'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.region,c:d.city,la:d.latitude,ln:d.longitude}; },
-    async () => { const r=await fetch('https://ip-api.com/json/?lang=zh-CN'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.regionName,c:d.city,la:d.lat,ln:d.lon}; },
-    async () => { const r=await fetch('https://api.ip.sb/geoip/'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.region||d.province,c:d.city,la:null,ln:null}; }
-  ];
+function updatePreview() {
+  const addr = gpsReady ? locAddress : (locAddress || '定位中...');
+  $('#wm-loc-preview').textContent = addr;
+  const wx = weatherTemp != null
+    ? `${weatherDesc} ${weatherTemp}°C`
+    : '获取中';
+  $('#wm-weather-preview').textContent = wx;
+}
 
-  for (const fn of apis) {
-    try {
-      const d = await fn();
-      const parts = [];
-      if (d.r) parts.push(d.r);
-      if (d.c && d.c !== d.r) parts.push(d.c);
-      if (parts.length > 0) {
-        const text = parts.join(' ');
-        locAddress = text;
-        if (d.la) { locLat = d.la; locLng = d.ln; }
-        $('#wm-loc-preview').textContent = text + ' (IP粗略)';
-        if (d.la) fetchWeather(d.la, d.ln);
-        setGpsState('err', 'IP粗略·点此重试GPS');
-        // 点击重试GPS
-        gpsText.style.cursor = 'pointer';
-        gpsText.onclick = async () => {
-          setGpsState('waiting', '获取位置中...');
-          gpsGuide.classList.add('hidden');
-          const ok = await tryGpsFix();
-          if (ok) {
-            $('#wm-loc-preview').textContent = locAddress; // 更新为GPS精确地址
-          } else {
-            setGpsState('err', 'GPS失败·点此重试');
-            showToast('GPS信号弱，请到室外');
-          }
-        };
-        return;
-      }
-    } catch {}
-  }
+// ====== 离线缓存 ======
+function saveCache(lat, lng, addr) {
+  try {
+    localStorage.setItem('wm_cache', JSON.stringify({
+      lat, lng, addr,
+      wx: weatherDesc, tmp: weatherTemp,
+      ts: Date.now()
+    }));
+  } catch {}
+}
 
-  setGpsState('err', '定位失败·点重试');
-  gpsText.style.cursor = 'pointer';
-  gpsText.onclick = () => { setGpsState('waiting','定位中...'); startGps(); };
+function loadCache() {
+  try {
+    const raw = localStorage.getItem('wm_cache');
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    // 24小时内的缓存
+    if (Date.now() - c.ts < 86400000) return c;
+  } catch {}
+  return null;
 }
 
 function startWatchGps() {
@@ -217,9 +266,10 @@ function startWatchGps() {
       if (locLat && haversine(locLat, locLng, lat, lng) < 0.05) return;
       locLat = lat;
       locLng = lng;
-      locAddress = await reverseGeocode(lat, lng);
+      locAddress = await reverseGeocodeOnline(lat, lng);
       $('#wm-loc-preview').textContent = locAddress;
       fetchWeather(lat, lng);
+      saveCache(lat, lng, locAddress);
     },
     () => {},
     { enableHighAccuracy: true, timeout: 30000, maximumAge: 30000 }
@@ -242,9 +292,9 @@ function haversine(lat1, lng1, lat2, lng2) {
 }
 function rad(d) { return d * Math.PI / 180; }
 
-// ====== 逆地理编码 ======
-async function reverseGeocode(lat, lng) {
-  // Nominatim — 免费，精度高
+// ====== 逆地理编码 + 离线降级 ======
+async function reverseGeocodeOnline(lat, lng) {
+  // 尝试 Nominatim（免费、精度高）
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=19&accept-language=zh&addressdetails=1`,
@@ -254,26 +304,23 @@ async function reverseGeocode(lat, lng) {
       const d = await r.json();
       if (d?.address) {
         const a = d.address;
-        // 构建详细地址：省 市 区 · 街道/路 · 建筑/小区
         const major = [];
         if (a.state) major.push(a.state.replace(/省|市$/, ''));
         if (a.city) major.push(a.city.replace(/市$/, ''));
         if (a.county) major.push(a.county);
         if (a.town || a.district || a.suburb) major.push(a.town || a.district || a.suburb);
-
         const detail = [];
         if (a.road) detail.push(a.road);
         if (a.neighbourhood) detail.push(a.neighbourhood);
         if (a.building || a.house_number) detail.push(a.building || a.house_number);
-
         let result = major.join('');
         if (detail.length > 0) result += '·' + detail.join('·');
-        return result || d.display_name?.split(',').slice(0,3).join(' ') || `${lat.toFixed(5)},${lng.toFixed(5)}`;
+        return result || `${lat.toFixed(5)},${lng.toFixed(5)}`;
       }
     }
   } catch {}
 
-  // 备用
+  // 备用 API
   try {
     const r = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`
@@ -288,6 +335,7 @@ async function reverseGeocode(lat, lng) {
     }
   } catch {}
 
+  // 没网 → 返回坐标
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
