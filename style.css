@@ -1,257 +1,190 @@
 /* ====== Reset & Base ====== */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: #0a0a0a;
-  font-family: -apple-system, "HarmonyOS Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none; -webkit-user-select: none;
-  touch-action: manipulation;
+html,body {
+  width:100%; height:100%; overflow:hidden;
+  background:#0a0a0a;
+  font-family:-apple-system,"HarmonyOS Sans","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none; -webkit-user-select:none;
+  touch-action:manipulation;
 }
 
-#app { width: 100%; height: 100%; position: relative; }
+#app { width:100%; height:100%; position:relative; }
 
 .page {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.3s;
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  opacity:0; pointer-events:none; transition:opacity .3s;
 }
-.page.active { opacity: 1; pointer-events: auto; }
+.page.active { opacity:1; pointer-events:auto; }
 
 /* ====== 取景器 ====== */
-#viewfinder {
-  position: absolute; inset: 0;
-  background: #000;
-  overflow: hidden;
+#viewfinder { position:absolute; inset:0; background:#000; overflow:hidden; }
+
+#video { width:100%; height:100%; object-fit:cover; }
+
+/* ====== 水印预览（左下角） ====== */
+#wm-preview {
+  position:absolute; left:16px; bottom:150px;
+  padding:10px 14px 12px 16px;
+  background:rgba(0,0,0,.52);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-radius:10px;
+  border-left:3px solid rgba(255,255,255,.82);
+  color:#fff;
+  z-index:5; pointer-events:none;
+  min-width:200px;
 }
 
-#video {
-  width: 100%; height: 100%;
-  object-fit: cover;
+.wm-title {
+  font-size:15px; font-weight:700;
+  letter-spacing:1px;
+  margin-bottom:6px;
+  color:#fff;
 }
 
-/* 对焦环 */
-#focus-ring {
-  position: absolute;
-  width: 80px; height: 80px;
-  border: 1.5px solid rgba(255,255,255,0.7);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.15s;
+.wm-row {
+  font-size:11px;
+  color:rgba(255,255,255,.78);
+  line-height:1.7;
+  display:flex; gap:2px;
 }
-#focus-ring.show { opacity: 1; }
+.wm-row span:first-child { flex-shrink:0; color:rgba(255,255,255,.55); }
+.wm-row span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* ====== 水印预览浮层 ====== */
-#watermark-preview {
-  position: absolute;
-  bottom: 160px; left: 20px;
-  pointer-events: none;
-  z-index: 5;
+/* ====== GPS 状态 ====== */
+#gps-status {
+  position:absolute; top:max(12px, env(safe-area-inset-top)); right:16px;
+  display:flex; align-items:center; gap:6px;
+  padding:6px 12px;
+  background:rgba(0,0,0,.38);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border-radius:14px;
+  font-size:12px; color:rgba(255,255,255,.75);
+  z-index:10;
 }
+.gps-dot { width:6px; height:6px; border-radius:50%; background:#ff9500; flex-shrink:0; }
+.gps-dot.ok { background:#34c759; }
+.gps-dot.err { background:#ff3b30; }
 
-.wm-pill {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 10px 16px;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border-radius: 12px;
-  border-left: 3px solid rgba(255,255,255,0.85);
+/* ====== 遮罩卡片（GPS引导 / 标题编辑） ====== */
+#gps-guide, #title-edit {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  z-index:25;
+  transition:opacity .3s;
 }
-.wm-time {
-  font-size: 15px; font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.3px;
-  font-variant-numeric: tabular-nums;
-}
-.wm-loc {
-  font-size: 12px;
-  color: rgba(255,255,255,0.8);
-  max-width: 220px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+#gps-guide.hidden, #title-edit.hidden { opacity:0; pointer-events:none; }
 
-/* ====== GPS 引导遮罩 ====== */
-#gps-prompt {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  z-index: 20;
-  transition: opacity 0.3s;
+.guide-card {
+  background:rgba(28,28,30,.96);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border-radius:18px;
+  padding:28px 24px 22px;
+  text-align:center;
+  max-width:290px; width:85%;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
 }
-#gps-prompt.hidden { opacity: 0; pointer-events: none; }
+.guide-icon { font-size:44px; margin-bottom:10px; }
+.guide-title { font-size:19px; font-weight:700; color:#fff; margin-bottom:8px; }
+.guide-desc { font-size:13px; color:rgba(255,255,255,.55); line-height:1.6; margin-bottom:22px; }
 
-.gps-card {
-  background: rgba(28,28,30,0.95);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 32px 28px 24px;
-  text-align: center;
-  max-width: 300px;
-  width: 85%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+#gps-btn, #title-save {
+  width:100%; padding:13px;
+  border:none; border-radius:12px;
+  background:#fff; color:#000;
+  font-size:15px; font-weight:600; font-family:inherit;
+  cursor:pointer;
+  transition:transform .15s,opacity .2s;
 }
-.gps-icon { font-size: 48px; margin-bottom: 12px; }
-.gps-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-.gps-desc { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 24px; }
+#gps-btn:active, #title-save:active { transform:scale(.96); opacity:.85; }
 
-#gps-btn {
-  width: 100%; padding: 14px;
-  border: none; border-radius: 14px;
-  background: #fff; color: #000;
-  font-size: 16px; font-weight: 600; font-family: inherit;
-  cursor: pointer;
-  transition: transform 0.15s, opacity 0.2s;
+#title-input {
+  width:100%; padding:12px 14px;
+  border:1.5px solid rgba(255,255,255,.18);
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  color:#fff; font-size:16px; font-family:inherit; text-align:center;
+  margin-bottom:16px;
+  outline:none;
 }
-#gps-btn:active { transform: scale(0.96); opacity: 0.85; }
-
-#gps-skip {
-  display: block; margin-top: 14px;
-  font-size: 13px; color: rgba(255,255,255,0.45);
-  cursor: pointer;
-}
-
-/* ====== 顶部栏 ====== */
-#top-bar {
-  position: absolute; top: 0; left: 0; right: 0;
-  padding: 10px 20px;
-  padding-top: max(10px, env(safe-area-inset-top));
-  display: flex; justify-content: space-between; align-items: center;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.tb-left, .tb-right {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px;
-  background: rgba(0,0,0,0.35);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-radius: 20px;
-  font-size: 13px; color: #fff;
-}
-
-.tb-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #34c759;
-  flex-shrink: 0;
-}
-.tb-dot.warn { background: #ff9500; }
-
-#tb-location {
-  max-width: 140px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-#tb-time {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.3px;
-}
+#title-input:focus { border-color:rgba(255,255,255,.4); }
 
 /* ====== 底部控制栏 ====== */
 #controls {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 16px 28px;
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
-  display: flex; justify-content: space-between; align-items: center;
-  z-index: 10;
+  position:absolute; bottom:0; left:0; right:0;
+  padding:14px 28px;
+  padding-bottom:max(18px, env(safe-area-inset-bottom));
+  display:flex; justify-content:space-between; align-items:center;
+  z-index:10;
 }
 
 .ctrl-side {
-  width: 44px; height: 44px;
-  border: none; border-radius: 50%;
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
+  width:44px; height:44px; border:none; border-radius:50%;
+  background:rgba(255,255,255,.1);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  transition:background .2s;
 }
-.ctrl-side:active { background: rgba(255,255,255,0.25); }
+.ctrl-side:active { background:rgba(255,255,255,.22); }
 
-/* 快门按钮 */
 #btn-capture {
-  width: 76px; height: 76px;
-  border: 5px solid rgba(255,255,255,0.95);
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: transform 0.12s, border-color 0.2s;
-  -webkit-tap-highlight-color: transparent;
+  width:74px; height:74px;
+  border:5px solid rgba(255,255,255,.95);
+  border-radius:50%;
+  background:transparent;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .12s,border-color .2s;
 }
-#btn-capture:active { transform: scale(0.9); }
-
+#btn-capture:active { transform:scale(.9); }
 #btn-capture .btn-inner {
-  width: 60px; height: 60px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.12s;
+  width:58px; height:58px; border-radius:50%;
+  background:#fff;
+  transition:transform .12s;
 }
-#btn-capture:active .btn-inner { transform: scale(0.85); }
+#btn-capture:active .btn-inner { transform:scale(.84); }
 
 /* ====== 结果页 ====== */
-#result-page { background: #0a0a0a; }
-
-#result-wrap {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 16px;
-}
-
-#result-canvas {
-  max-width: 100%; max-height: 100%;
-  border-radius: 8px;
-  object-fit: contain;
-}
+#result-page { background:#0a0a0a; }
+#result-wrap { flex:1; display:flex; align-items:center; justify-content:center; padding:16px; }
+#result-canvas { max-width:100%; max-height:100%; border-radius:6px; object-fit:contain; }
 
 #result-actions {
-  padding: 16px 28px;
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
-  display: flex; gap: 14px;
+  padding:14px 28px;
+  padding-bottom:max(18px, env(safe-area-inset-bottom));
+  display:flex; gap:12px;
 }
-
-.btn-outline, .btn-solid {
-  flex: 1; padding: 15px 0;
-  border-radius: 14px;
-  font-size: 16px; font-weight: 600; font-family: inherit;
-  cursor: pointer;
-  transition: transform 0.15s, opacity 0.2s;
-  text-align: center;
+.btn-outline,.btn-solid {
+  flex:1; padding:15px 0; border-radius:13px;
+  font-size:16px; font-weight:600; font-family:inherit;
+  cursor:pointer;
+  transition:transform .15s,opacity .2s; text-align:center;
 }
-.btn-outline:active, .btn-solid:active { transform: scale(0.96); opacity: 0.8; }
-
-.btn-outline {
-  border: 1.5px solid rgba(255,255,255,0.25);
-  background: transparent; color: #fff;
-}
-
-.btn-solid {
-  border: none;
-  background: #fff; color: #000;
-}
+.btn-outline:active,.btn-solid:active { transform:scale(.96); opacity:.8; }
+.btn-outline { border:1.5px solid rgba(255,255,255,.22); background:transparent; color:#fff; }
+.btn-solid { border:none; background:#fff; color:#000; }
 
 /* ====== Toast ====== */
 #toast {
-  position: fixed; bottom: 150px; left: 50%;
-  transform: translateX(-50%) translateY(12px);
-  background: rgba(44,44,46,0.92);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  color: #fff; padding: 10px 24px;
-  border-radius: 20px; font-size: 14px;
-  z-index: 100; opacity: 0; pointer-events: none;
-  transition: opacity 0.3s, transform 0.3s;
+  position:fixed; bottom:150px; left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:rgba(44,44,46,.92);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  color:#fff; padding:10px 22px;
+  border-radius:18px; font-size:14px;
+  z-index:100; opacity:0; pointer-events:none;
+  transition:opacity .3s,transform .3s;
 }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-/* ====== 捕获闪光 ====== */
+/* 闪光 */
 .flash-overlay {
-  position: fixed; inset: 0;
-  background: #fff; opacity: 0; pointer-events: none;
-  z-index: 50;
-  animation: flash 0.35s ease-out;
+  position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:50;
+  animation:flash .35s ease-out;
 }
-@keyframes flash {
-  0% { opacity: 0.7; }
-  100% { opacity: 0; }
-}
+@keyframes flash { 0%{opacity:.7} 100%{opacity:0} }
