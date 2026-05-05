@@ -5,42 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#0a0a0a">
   <title>水印相机</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- 相机取景画面 -->
-  <div id="camera-view" class="fullscreen">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="preview-canvas" style="display:none"></canvas>
+  <div id="app">
 
-    <!-- 顶部状态栏 -->
-    <div id="top-bar">
-      <span id="status-time">--:--:--</span>
-      <span id="status-location" title="点击重新定位">📍 定位中...</span>
+    <!-- ====== 取景页 ====== -->
+    <div id="camera-page" class="page active">
+
+      <!-- 相机预览 -->
+      <div id="viewfinder">
+        <video id="video" autoplay playsinline></video>
+
+        <!-- 对焦框 -->
+        <div id="focus-ring"></div>
+
+        <!-- 水印预览浮层 -->
+        <div id="watermark-preview">
+          <div class="wm-pill">
+            <span class="wm-time" id="wm-time">--</span>
+            <span class="wm-loc" id="wm-loc">准备就绪</span>
+          </div>
+        </div>
+
+        <!-- GPS 权限引导遮罩 -->
+        <div id="gps-prompt">
+          <div class="gps-card">
+            <div class="gps-icon">📍</div>
+            <div class="gps-title">开启精确定位</div>
+            <div class="gps-desc">拍照时自动添加所在地地名，比 IP 定位精准到街道</div>
+            <button id="gps-btn">启用位置权限</button>
+            <span id="gps-skip">先用 IP 粗略定位</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 顶部栏 -->
+      <div id="top-bar">
+        <div class="tb-left">
+          <span class="tb-dot"></span>
+          <span id="tb-location">—</span>
+        </div>
+        <div class="tb-right">
+          <span id="tb-time">--:--</span>
+        </div>
+      </div>
+
+      <!-- 底部栏 -->
+      <div id="controls">
+        <button id="btn-gallery" class="ctrl-side">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        </button>
+
+        <button id="btn-capture">
+          <span class="btn-inner"></span>
+        </button>
+
+        <button id="btn-switch" class="ctrl-side">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><path d="M19 7h-7a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h7"/><path d="m16 4 3 3-3 3"/></svg>
+        </button>
+      </div>
     </div>
 
-    <!-- 底部操作栏 -->
-    <div id="bottom-bar">
-      <button id="btn-switch" title="切换摄像头">🔄</button>
-      <button id="btn-capture"></button>
-      <button id="btn-gallery" title="查看照片">🖼</button>
+    <!-- ====== 结果页 ====== -->
+    <div id="result-page" class="page">
+      <div id="result-wrap">
+        <canvas id="result-canvas"></canvas>
+      </div>
+      <div id="result-actions">
+        <button id="btn-retake" class="btn-outline">重拍</button>
+        <button id="btn-save" class="btn-solid">保存到相册</button>
+      </div>
     </div>
+
   </div>
 
-  <!-- 拍照结果预览 -->
-  <div id="result-view" class="fullscreen" style="display:none">
-    <canvas id="result-canvas"></canvas>
-    <div id="result-actions">
-      <button id="btn-retake">重拍</button>
-      <button id="btn-save">保存</button>
-    </div>
-  </div>
-
-  <!-- Toast 提示 -->
+  <canvas id="preview-canvas" style="display:none"></canvas>
   <div id="toast"></div>
 
   <script src="app.js"></script>
