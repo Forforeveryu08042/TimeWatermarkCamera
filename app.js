@@ -87,62 +87,63 @@ btnSwitch.addEventListener('click', () => {
   startCamera();
 });
 
-// ====== GPS 定位（唯一来源，不用IP） ======
+// ====== 定位（GPS优先，8秒超时IP兜底，可随时重试GPS） ======
 async function startGps() {
   if (!navigator.geolocation) {
-    setGpsState('err', 'GPS不可用');
+    await fallbackIp();
     return;
   }
 
-  // 检查权限
-  try {
-    const perm = await navigator.permissions?.query({ name:'geolocation' });
-    if (perm) {
-      if (perm.state === 'denied') {
-        setGpsState('err', '位置权限已拒绝');
-        showToast('请在系统设置中允许位置权限');
-        return;
-      }
-      if (perm.state === 'granted') {
-        // 已有权限，直接定位
-        setGpsState('waiting', '获取位置中...');
-        await doGpsFix();
-        return;
-      }
-    }
-  } catch {}
-
-  // 需要引导用户授权
+  // 直接弹出引导，不依赖 permissions API（部分手机不支持）
   setGpsState('waiting', '等待授权');
   gpsGuide.classList.remove('hidden');
 
   gpsBtn.onclick = async () => {
     gpsGuide.classList.add('hidden');
     setGpsState('waiting', '获取位置中...');
-    await doGpsFix();
+    const ok = await tryGpsFix();
+    if (!ok) {
+      await fallbackIp();
+    }
   };
+
+  // 用户可能之前已授权，并行静默尝试 GPS（不阻塞 IP）
+  trySilentGps();
 }
 
-async function doGpsFix() {
+// 并行静默尝试：如果浏览器已有权限，直接出结果
+async function trySilentGps() {
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false, // 低精度模式，更快
+        timeout: 5000,
+        maximumAge: 120000 // 允许用2分钟内的缓存
+      });
+    });
+    gpsGuide.classList.add('hidden');
+    await onGpsSuccess(pos.coords.latitude, pos.coords.longitude);
+  } catch {
+    // 静默失败，等用户点按钮或 IP 兜底
+  }
+}
+
+// 用户点击"启用位置权限"或点状态栏重试
+async function tryGpsFix() {
   try {
     const pos = await new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
         enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0  // 强制获取新位置，不用缓存
+        timeout: 10000,
+        maximumAge: 60000
       });
     });
+    gpsGuide.classList.add('hidden');
     await onGpsSuccess(pos.coords.latitude, pos.coords.longitude);
+    return true;
   } catch (e) {
-    console.warn('GPS fix failed:', e.message);
-    setGpsState('err', '定位失败，点击重试');
-    // 点击状态栏重试
-    gpsText.onclick = () => {
-      setGpsState('waiting', '获取位置中...');
-      doGpsFix();
-    };
-    gpsText.style.cursor = 'pointer';
-    showToast('GPS信号弱，请到室外或窗边');
+    console.warn('GPS失败:', e.message);
+    return false;
   }
 }
 
@@ -152,16 +153,58 @@ async function onGpsSuccess(lat, lng) {
   gpsReady = true;
   setGpsState('ok', 'GPS已定位');
 
-  // 逆地理编码
   const addr = await reverseGeocode(lat, lng);
   locAddress = addr;
   $('#wm-loc-preview').textContent = addr;
-
-  // 获取天气
   fetchWeather(lat, lng);
-
-  // 持续监听位置变化
   startWatchGps();
+}
+
+// IP 兜底
+async function fallbackIp() {
+  if (gpsReady) return; // GPS 已成功就不覆盖
+  setGpsState('waiting', 'IP定位中...');
+
+  const apis = [
+    async () => { const r=await fetch('https://ipapi.co/json/'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.region,c:d.city,la:d.latitude,ln:d.longitude}; },
+    async () => { const r=await fetch('https://ip-api.com/json/?lang=zh-CN'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.regionName,c:d.city,la:d.lat,ln:d.lon}; },
+    async () => { const r=await fetch('https://api.ip.sb/geoip/'); if(!r.ok)throw 0; const d=await r.json(); return {r:d.region||d.province,c:d.city,la:null,ln:null}; }
+  ];
+
+  for (const fn of apis) {
+    try {
+      const d = await fn();
+      const parts = [];
+      if (d.r) parts.push(d.r);
+      if (d.c && d.c !== d.r) parts.push(d.c);
+      if (parts.length > 0) {
+        const text = parts.join(' ');
+        locAddress = text;
+        if (d.la) { locLat = d.la; locLng = d.ln; }
+        $('#wm-loc-preview').textContent = text + ' (IP粗略)';
+        if (d.la) fetchWeather(d.la, d.ln);
+        setGpsState('err', 'IP粗略·点此重试GPS');
+        // 点击重试GPS
+        gpsText.style.cursor = 'pointer';
+        gpsText.onclick = async () => {
+          setGpsState('waiting', '获取位置中...');
+          gpsGuide.classList.add('hidden');
+          const ok = await tryGpsFix();
+          if (ok) {
+            $('#wm-loc-preview').textContent = locAddress; // 更新为GPS精确地址
+          } else {
+            setGpsState('err', 'GPS失败·点此重试');
+            showToast('GPS信号弱，请到室外');
+          }
+        };
+        return;
+      }
+    } catch {}
+  }
+
+  setGpsState('err', '定位失败·点重试');
+  gpsText.style.cursor = 'pointer';
+  gpsText.onclick = () => { setGpsState('waiting','定位中...'); startGps(); };
 }
 
 function startWatchGps() {
@@ -287,10 +330,6 @@ titleEdit.addEventListener('click', (e) => {
 // ====== 拍照 ======
 btnCapture.addEventListener('click', () => {
   if (!stream) return;
-  if (!gpsReady) {
-    showToast('请等待GPS定位完成');
-    return;
-  }
 
   const vw = video.videoWidth || 1920;
   const vh = video.videoHeight || 1080;
