@@ -72,33 +72,18 @@ btnSwitch.addEventListener('click', () => {
 async function locate() {
   statusLocation.textContent = '定位中...';
 
-  // 1) 优先用 GPS — getCurrentPosition 比 watchPosition 更快出结果
+  // 1) 立刻用 IP 定位（无需权限，秒出结果，不受 GPS 弹窗阻塞）
+  const ipDone = ipGeolocate();
+
+  // 2) 同时尝试 GPS（需要用户点允许，可能很慢）
   if (navigator.geolocation) {
-    try {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000
-        });
-      });
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      currentLocation.lat = lat;
-      currentLocation.lng = lng;
-      const addr = await reverseGeocode(lat, lng);
-      statusLocation.textContent = addr;
-      currentLocation.text = addr;
-    } catch (gpsErr) {
-      console.warn('GPS定位失败:', gpsErr.message);
-      // 2) GPS 失败 → IP 定位兜底
-      await ipFallback();
-    }
-  } else {
-    await ipFallback();
+    gpsGeolocate(); // 不 await，让它在后台跑
   }
 
-  // 3) 启动持续监听（位置变化时更新）
+  // 3) 等 IP 定位完成，确保不会一直卡在"定位中"
+  await ipDone;
+
+  // 4) 启动 GPS 持续监听
   if (navigator.geolocation) {
     if (locationWatchId !== null) navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = navigator.geolocation.watchPosition(
@@ -111,38 +96,81 @@ async function locate() {
         statusLocation.textContent = addr;
         currentLocation.text = addr;
       },
-      () => {}, // 静默失败，不覆盖已有结果
+      () => {},
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
     );
   }
 }
 
-async function ipFallback() {
+async function gpsGeolocate() {
   try {
-    const resp = await fetch('https://ipapi.co/json/');
-    if (resp.ok) {
-      const d = await resp.json();
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 30000
+      });
+    });
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    currentLocation.lat = lat;
+    currentLocation.lng = lng;
+    const addr = await reverseGeocode(lat, lng);
+    statusLocation.textContent = addr;
+    currentLocation.text = addr;
+  } catch (e) {
+    console.warn('GPS未就绪:', e.message);
+    // IP 定位已经显示了，不用额外处理
+  }
+}
+
+async function ipGeolocate() {
+  // 依次尝试多个免费 IP 定位 API
+  const apis = [
+    async () => {
+      const r = await fetch('https://ipapi.co/json/');
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      return { region: d.region, city: d.city, lat: d.latitude, lng: d.longitude };
+    },
+    async () => {
+      const r = await fetch('https://ip-api.com/json/?lang=zh-CN');
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      return { region: d.regionName, city: d.city, lat: d.lat, lng: d.lon };
+    },
+    async () => {
+      const r = await fetch('https://ipinfo.io/json?token=9b8a0c0c0d0e0f');
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      return { region: d.region, city: d.city, lat: null, lng: null };
+    }
+  ];
+
+  for (const fn of apis) {
+    try {
+      const d = await fn();
       const parts = [];
       if (d.region) parts.push(d.region);
-      if (d.city) parts.push(d.city);
+      if (d.city && d.city !== d.region) parts.push(d.city);
       if (parts.length > 0) {
         const text = parts.join(' ');
-        // 也设置坐标（IP定位精度有限，但聊胜于无）
-        currentLocation.lat = d.latitude || null;
-        currentLocation.lng = d.longitude || null;
+        currentLocation.lat = d.lat || null;
+        currentLocation.lng = d.lng || null;
         statusLocation.textContent = text;
         currentLocation.text = text;
         return;
       }
-    }
-  } catch (e) { console.warn('IP定位也失败:', e); }
+    } catch { /* 试下一个 */ }
+  }
+
+  // 全部失败
   statusLocation.textContent = '点击重试定位';
   currentLocation.text = '未知位置';
 }
 
 // 点击位置文字手动重新定位
 statusLocation.addEventListener('click', () => {
-  if (statusLocation.textContent === '定位中...') return;
   locate();
 });
 
