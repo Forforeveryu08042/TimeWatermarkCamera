@@ -1,0 +1,196 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, "HarmonyOS Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.fullscreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ====== 取景画面 ====== */
+#video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ====== 顶部状态栏 ====== */
+#top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: linear-gradient(to bottom, rgba(0,0,0,0.45), transparent);
+  color: #fff;
+  font-size: 14px;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+}
+
+#status-time {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+#status-location {
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+  font-size: 12px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ====== 底部操作栏 ====== */
+#bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 24px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 10;
+}
+
+#btn-switch, #btn-gallery {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+#btn-switch:active, #btn-gallery:active {
+  background: rgba(255,255,255,0.3);
+}
+
+#btn-capture {
+  width: 72px;
+  height: 72px;
+  border: 4px solid rgba(255,255,255,0.9);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s, background 0.2s;
+}
+
+#btn-capture::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+#btn-capture:active {
+  transform: scale(0.92);
+  background: rgba(255,255,255,0.35);
+}
+
+/* ====== 结果预览 ====== */
+#result-view {
+  background: #000;
+}
+
+#result-canvas {
+  flex: 1;
+  width: 100%;
+  object-fit: contain;
+}
+
+#result-actions {
+  padding: 20px 24px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+#btn-retake, #btn-save {
+  padding: 14px 48px;
+  border: none;
+  border-radius: 28px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+#btn-retake {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+#btn-save {
+  background: #fff;
+  color: #000;
+}
+
+#btn-retake:active, #btn-save:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
+/* ====== Toast ====== */
+#toast {
+  position: fixed;
+  bottom: 140px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0,0,0,0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-size: 14px;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

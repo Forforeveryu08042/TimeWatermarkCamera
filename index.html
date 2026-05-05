@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <title>水印相机</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 相机取景画面 -->
+  <div id="camera-view" class="fullscreen">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="preview-canvas" style="display:none"></canvas>
+
+    <!-- 顶部状态栏 -->
+    <div id="top-bar">
+      <span id="status-time">--:--:--</span>
+      <span id="status-location" title="点击重新定位">📍 定位中...</span>
+    </div>
+
+    <!-- 底部操作栏 -->
+    <div id="bottom-bar">
+      <button id="btn-switch" title="切换摄像头">🔄</button>
+      <button id="btn-capture"></button>
+      <button id="btn-gallery" title="查看照片">🖼</button>
+    </div>
+  </div>
+
+  <!-- 拍照结果预览 -->
+  <div id="result-view" class="fullscreen" style="display:none">
+    <canvas id="result-canvas"></canvas>
+    <div id="result-actions">
+      <button id="btn-retake">重拍</button>
+      <button id="btn-save">保存</button>
+    </div>
+  </div>
+
+  <!-- Toast 提示 -->
+  <div id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
